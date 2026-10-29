@@ -1,0 +1,1 @@
+Build trigger for SONIC BONGO ESP32-S3 N16R8 diagnostic 16MB image.
