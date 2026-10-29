@@ -32,7 +32,7 @@ jobs:
         run: |
           mkdir -p build
           arduino-cli compile \
-            --fqbn 'esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=default_16MB,PSRAM=opi,FlashMode=qio' \
+            --fqbn 'esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi,FlashMode=qio' \
             --export-binaries \
             --output-dir build \
             firmware/ESP32S3_N16R8_PinMonitor
