@@ -45,32 +45,14 @@ jobs:
           set -euo pipefail
           APP=$(find build -maxdepth 1 -type f -name '*.bin' ! -name '*.bootloader.bin' ! -name '*.partitions.bin' ! -name '*.merged.bin' | head -n1)
           MERGED=$(find build -maxdepth 1 -type f -name '*.merged.bin' | head -n1 || true)
-
           if [ -z "$MERGED" ]; then
             echo 'Arduino core did not emit a merged image.' >&2
             exit 1
           fi
-
           cp "$APP" build/SONIC_BONGO_N16R8_DIAG_app.bin
           cp "$MERGED" build/SONIC_BONGO_N16R8_DIAG_merged.bin
-
-          python3 - <<'PY'
-from pathlib import Path
-src = Path('build/SONIC_BONGO_N16R8_DIAG_merged.bin')
-out = Path('build/SONIC_BONGO_N16R8_DIAG_FULL_16MB.bin')
-data = src.read_bytes()
-size = 16 * 1024 * 1024
-if len(data) > size:
-    raise SystemExit(f'merged image too large: {len(data)} > {size}')
-out.write_bytes(data + b'\xff' * (size - len(data)))
-print('merged source:', len(data), 'bytes')
-print('full image:', out.stat().st_size, 'bytes')
-PY
-
-          sha256sum build/SONIC_BONGO_N16R8_DIAG_app.bin \
-                    build/SONIC_BONGO_N16R8_DIAG_merged.bin \
-                    build/SONIC_BONGO_N16R8_DIAG_FULL_16MB.bin \
-            | tee build/SHA256SUMS.txt
+          python3 -c "from pathlib import Path; src=Path('build/SONIC_BONGO_N16R8_DIAG_merged.bin'); out=Path('build/SONIC_BONGO_N16R8_DIAG_FULL_16MB.bin'); data=src.read_bytes(); size=16*1024*1024; assert len(data)<=size, f'merged image too large: {len(data)} > {size}'; out.write_bytes(data + bytes([255])*(size-len(data))); print('merged source:',len(data),'bytes'); print('full image:',out.stat().st_size,'bytes')"
+          sha256sum build/SONIC_BONGO_N16R8_DIAG_app.bin build/SONIC_BONGO_N16R8_DIAG_merged.bin build/SONIC_BONGO_N16R8_DIAG_FULL_16MB.bin | tee build/SHA256SUMS.txt
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
