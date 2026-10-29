@@ -1,0 +1,84 @@
+name: Build ESP32-S3 N16R8 Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firmware/ESP32S3_N16R8_PinMonitor/**'
+      - '.github/workflows/build-n16r8.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 core
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@3.3.3
+
+      - name: Show ESP32-S3 board options
+        run: arduino-cli board details -b esp32:esp32:esp32s3
+
+      - name: Compile N16R8 16MB + OPI PSRAM
+        run: |
+          mkdir -p build
+          arduino-cli compile \
+            --fqbn 'esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=default_16MB,PSRAM=opi,FlashMode=qio' \
+            --export-binaries \
+            --output-dir build \
+            firmware/ESP32S3_N16R8_PinMonitor
+          echo '--- BUILD FILES ---'
+          find build -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
+
+      - name: Prepare direct-flash 16MB image
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find build -maxdepth 1 -type f -name '*.bin' ! -name '*.bootloader.bin' ! -name '*.partitions.bin' ! -name '*.merged.bin' | head -n1)
+          MERGED=$(find build -maxdepth 1 -type f -name '*.merged.bin' | head -n1 || true)
+
+          if [ -z "$MERGED" ]; then
+            echo 'Arduino core did not emit a merged image.' >&2
+            exit 1
+          fi
+
+          cp "$APP" build/SONIC_BONGO_N16R8_DIAG_app.bin
+          cp "$MERGED" build/SONIC_BONGO_N16R8_DIAG_merged.bin
+
+          python3 - <<'PY'
+from pathlib import Path
+src = Path('build/SONIC_BONGO_N16R8_DIAG_merged.bin')
+out = Path('build/SONIC_BONGO_N16R8_DIAG_FULL_16MB.bin')
+data = src.read_bytes()
+size = 16 * 1024 * 1024
+if len(data) > size:
+    raise SystemExit(f'merged image too large: {len(data)} > {size}')
+out.write_bytes(data + b'\xff' * (size - len(data)))
+print('merged source:', len(data), 'bytes')
+print('full image:', out.stat().st_size, 'bytes')
+PY
+
+          sha256sum build/SONIC_BONGO_N16R8_DIAG_app.bin \
+                    build/SONIC_BONGO_N16R8_DIAG_merged.bin \
+                    build/SONIC_BONGO_N16R8_DIAG_FULL_16MB.bin \
+            | tee build/SHA256SUMS.txt
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SONIC_BONGO_N16R8_DIAG_16MB
+          path: |
+            build/SONIC_BONGO_N16R8_DIAG_app.bin
+            build/SONIC_BONGO_N16R8_DIAG_merged.bin
+            build/SONIC_BONGO_N16R8_DIAG_FULL_16MB.bin
+            build/SHA256SUMS.txt
+          if-no-files-found: error
