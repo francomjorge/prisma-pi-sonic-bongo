@@ -1,0 +1,64 @@
+name: Build Dual Air-Hit Diagnostic v9
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'firmware/ESP32S3_N16R8_DualAirHit/**'
+      - '.github/workflows/build-dual-airhit-v9.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.x
+
+      - name: Install ESP32 core
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@3.3.3
+
+      - name: Compile N16R8 16MB + OPI PSRAM
+        run: |
+          mkdir -p build
+          arduino-cli compile \
+            --fqbn 'esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi,FlashMode=qio' \
+            --export-binaries \
+            --output-dir build \
+            firmware/ESP32S3_N16R8_DualAirHit
+          echo '--- BUILD FILES ---'
+          find build -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
+
+      - name: Prepare direct-flash 16MB image
+        run: |
+          APP=$(find build -maxdepth 1 -type f -name '*.ino.bin' | head -1)
+          MERGED=$(find build -maxdepth 1 -type f -name '*.ino.merged.bin' | head -1)
+          test -n "$APP"
+          test -n "$MERGED"
+          cp "$APP" build/SONIC_BONGO_DUAL_AIRHIT_v9_app.bin
+          cp "$MERGED" build/SONIC_BONGO_DUAL_AIRHIT_v9_merged.bin
+          cp "$MERGED" build/SONIC_BONGO_DUAL_AIRHIT_v9_FULL_16MB.bin
+          truncate -s $((16*1024*1024)) build/SONIC_BONGO_DUAL_AIRHIT_v9_FULL_16MB.bin
+          sha256sum build/SONIC_BONGO_DUAL_AIRHIT_v9_app.bin build/SONIC_BONGO_DUAL_AIRHIT_v9_merged.bin build/SONIC_BONGO_DUAL_AIRHIT_v9_FULL_16MB.bin > build/SHA256SUMS.txt
+          stat -c '%n %s bytes' build/SONIC_BONGO_DUAL_AIRHIT_v9_FULL_16MB.bin
+          cat build/SHA256SUMS.txt
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SONIC_BONGO_DUAL_AIRHIT_v9_16MB
+          path: |
+            build/SONIC_BONGO_DUAL_AIRHIT_v9_app.bin
+            build/SONIC_BONGO_DUAL_AIRHIT_v9_merged.bin
+            build/SONIC_BONGO_DUAL_AIRHIT_v9_FULL_16MB.bin
+            build/SHA256SUMS.txt
+          if-no-files-found: error
