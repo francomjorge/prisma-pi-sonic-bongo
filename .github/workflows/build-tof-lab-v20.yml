@@ -1,11 +1,11 @@
-name: Build SONIC BONGO Hybrid v20.0 ToF Laboratory
+name: Build SONIC BONGO v20.0 ToF Laboratory
 
 on:
   push:
     branches: [main]
     paths:
       - 'firmware/ESP32S3_N16R8_ToF_Lab_v20/**'
-      - '.github/workflows/build-bongo-hybrid-tof-lab-v20.yml'
+      - '.github/workflows/build-tof-lab-v20.yml'
   workflow_dispatch:
 
 jobs:
