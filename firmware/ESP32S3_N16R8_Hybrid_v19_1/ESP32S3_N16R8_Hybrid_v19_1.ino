@@ -501,7 +501,7 @@ const char HYBRID_LAB_PAGE[] PROGMEM=R"HYBRIDHTML(
 <p id="error" class="status"></p></main>
 <script>
 const $=s=>document.getElementById(s),vals={w:'wval',agree:'agreeval',offset:'offsetval',down:'downval',amp:'ampval',bpm:'bpmval'};
-let current=null,activeTab=0,dirty=false,audio=null,soundOn=false,lastEvent=0,afterSeq=0,records=[],metroTimer=null,metroCount=0;
+let current=null,activeTab=0,dirty=false,audio=null,soundOn=false,lastEvent=null,afterSeq=0,records=[],metroTimer=null,metroCount=0;
 function tab(n){activeTab=n;for(let i=0;i<3;i++){$('panel'+i).classList.toggle('active',i===n);$('tab'+i).classList.toggle('activeBtn',i===n)}}
 function fmt(n,dec=1){return Number(n).toFixed(dec)}
 function labels(){Object.entries(vals).forEach(([k,v])=>$(v).textContent=$(k).value+(k==='w'?'%':k==='bpm'?'':k==='down'?' cm/s':k==='amp'||k==='offset'||k==='agree'?' cm':''));}
@@ -528,7 +528,7 @@ async function refresh(){if(polling)return;polling=true;try{let r=await fetch('/
 $('to1').textContent=j.s1.timeouts;$('to2').textContent=j.tofStatus;
 let f=j.fusion;$('y').textContent=f.valid?fmt(f.y,2)+' cm':'--';$('v').textContent=fmt(f.velocity,0)+' cm/s';$('a').textContent=fmt(f.acceleration,0)+' cm/s²';$('phase').textContent=f.phase;$('hits').textContent=f.hits;$('source').textContent=(f.sourceMask===3?'AMBOS':f.sourceMask===2?'ToF':f.sourceMask===1?'US':'--')+' / '+fmt(f.quality,0)+'%';
 if(!dirty && !window.cfgLoaded){syncCfg(j.cfgHybrid);window.cfgLoaded=true;}
-if(lastEvent===0){lastEvent=f.eventSeq;}else if(f.eventSeq!==lastEvent){lastEvent=f.eventSeq;if(soundOn)click(520+f.midi*3,.055);}
+if(lastEvent===null){lastEvent=f.eventSeq;}else if(f.eventSeq!==lastEvent){lastEvent=f.eventSeq;if(soundOn)click(520+f.midi*3,.055);}
 $('error').textContent='';
 }catch(e){$('error').textContent='Sin telemetría: '+e}finally{polling=false;}}
 setInterval(refresh,120);setInterval(getTrace,130);setInterval(getMeta,2000);
