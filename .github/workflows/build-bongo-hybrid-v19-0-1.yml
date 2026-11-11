@@ -1,0 +1,81 @@
+name: Build SONIC BONGO Hybrid v19.0.1 Echo Debug
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firmware/ESP32S3_N16R8_Hybrid_v19_0_1/**'
+      - '.github/workflows/build-bongo-hybrid-v19-0-1.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare inherited v18, v17 and v16 code
+        run: |
+          cp firmware/ESP32S3_N16R8_BongoDual_v18/ESP32S3_N16R8_BongoDual_v18.ino firmware/ESP32S3_N16R8_Hybrid_v19_0_1/base_v18.h
+          cp firmware/ESP32S3_N16R8_BongoDual_v17/ESP32S3_N16R8_BongoDual_v17.ino firmware/ESP32S3_N16R8_Hybrid_v19_0_1/base_v17.h
+          cp firmware/ESP32S3_N16R8_BongoDual_v16/ESP32S3_N16R8_BongoDual_v16.ino firmware/ESP32S3_N16R8_Hybrid_v19_0_1/base_v16.h
+          python3 - <<'PY'
+          from pathlib import Path
+          for version in [17,18]:
+              p=Path('firmware/ESP32S3_N16R8_Hybrid_v19_0_1/base_v%d.h'%version)
+              s=p.read_text()
+              a='void setup() {'
+              b='void loop() {'
+              assert s.count(a)==1,(version,'setup count',s.count(a))
+              assert s.count(b)==1,(version,'loop count',s.count(b))
+              s=s.replace(a,'void setup_v%d() {'%version,1)
+              s=s.replace(b,'void loop_v%d() {'%version,1)
+              p.write_text(s)
+          PY
+
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.x
+
+      - name: Install ESP32-S3 core and VL53L1X driver
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@3.3.3
+          arduino-cli lib install "VL53L1X"
+          arduino-cli lib list
+
+      - name: Compile ESP32-S3 N16R8
+        run: |
+          mkdir -p build
+          arduino-cli compile \
+            --fqbn 'esp32:esp32:esp32s3:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi,FlashMode=qio' \
+            --export-binaries --output-dir build \
+            firmware/ESP32S3_N16R8_Hybrid_v19_0_1
+          find build -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
+
+      - name: Make 16MB flash image
+        run: |
+          APP=$(find build -maxdepth 1 -type f -name '*.ino.bin' | head -1)
+          MERGED=$(find build -maxdepth 1 -type f -name '*.ino.merged.bin' | head -1)
+          test -n "$APP" && test -n "$MERGED"
+          cp "$APP" build/SONIC_BONGO_HYBRID_v19_0_1_app.bin
+          cp "$MERGED" build/SONIC_BONGO_HYBRID_v19_0_1_FULL_16MB.bin
+          truncate -s $((16*1024*1024)) build/SONIC_BONGO_HYBRID_v19_0_1_FULL_16MB.bin
+          cd build
+          sha256sum SONIC_BONGO_HYBRID_v19_0_1_app.bin SONIC_BONGO_HYBRID_v19_0_1_FULL_16MB.bin > SHA256SUMS.txt
+          test "$(stat -c%s SONIC_BONGO_HYBRID_v19_0_1_FULL_16MB.bin)" -eq 16777216
+          cat SHA256SUMS.txt
+
+      - name: Upload BIN and checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: SONIC_BONGO_HYBRID_v19_0_1_16MB
+          path: |
+            build/SONIC_BONGO_HYBRID_v19_0_1_app.bin
+            build/SONIC_BONGO_HYBRID_v19_0_1_FULL_16MB.bin
+            build/SHA256SUMS.txt
+          if-no-files-found: error
