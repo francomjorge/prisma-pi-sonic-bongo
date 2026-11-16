@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'firmware/ESP32S3_N16R8_Hybrid_v19_0_1_ActiveBuzzer/**'
-      - '.github/workflows/build-bongo-hybrid-v19-0-1-active-buzzer.yml'
+      - '.github/workflows/build-bongo-v19-0-1-active-buzzer.yml'
   workflow_dispatch:
 
 jobs:
